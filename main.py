@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import yt_dlp
-import requests
+import json
+import urllib.request
 
 app = FastAPI()
 
@@ -26,19 +27,19 @@ def get_youtube_fallback(url: str):
     
     for instance in INVIDIOUS_INSTANCES:
         try:
-            res = requests.get(f"{instance}/api/v1/videos/{video_id}", headers=headers, timeout=6)
-            if res.status_code == 200:
-                data = res.json()
-                format_streams = data.get("formatStreams", [])
-                if format_streams:
-                    return format_streams[-1].get("url")
+            req = urllib.request.Request(f"{instance}/api/v1/videos/{video_id}", headers=headers)
+            with urllib.request.urlopen(req, timeout=5) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode("utf-8"))
+                    format_streams = data.get("formatStreams", [])
+                    if format_streams:
+                        return format_streams[-1].get("url")
         except Exception:
             continue
     return None
 
 @app.post("/extract")
 def extract_video(req: DownloadRequest):
-    # Enforce direct MP4 format for gallery playback
     ydl_opts = {
         'format': 'best[ext=mp4]/best',
         'quiet': True,
@@ -62,7 +63,6 @@ def extract_video(req: DownloadRequest):
                 return {"status": "success", "url": video_url}
                 
     except Exception:
-        # If Render IP is bot-blocked by YouTube, fallback to Invidious Network automatically
         if "youtube.com" in req.url or "youtu.be" in req.url:
             fallback_url = get_youtube_fallback(req.url)
             if fallback_url:
