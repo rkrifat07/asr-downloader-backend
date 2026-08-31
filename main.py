@@ -15,22 +15,26 @@ def health_check():
 
 @app.post("/extract")
 def extract_video(req: DownloadRequest):
+    # Enforce pure direct MP4 format that Android native gallery players can play
+    format_option = 'best[ext=mp4]/best' if not req.audio else 'bestaudio[ext=m4a]/bestaudio/best'
+
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best' if not req.audio else 'bestaudio/best',
+        'format': format_option,
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'user_agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
         'http_headers': {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Sec-Fetch-Mode': 'navigate',
         },
-        # YouTube Specific Bypass Args (Bypasses SABR / PO Token Bot detection)
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'web_creator'],
+                'player_client': ['android', 'ios'],
                 'skip': ['hls', 'dash']
+            },
+            'instagram': {
+                'claim_manifest': False
             }
         }
     }
@@ -39,16 +43,22 @@ def extract_video(req: DownloadRequest):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
             
-            # Extract direct streaming URL
+            # Retrieve direct MP4 play-able video URL
             video_url = info.get('url')
+            
             if not video_url and 'formats' in info:
-                # Fallback to best available format URL
-                video_url = info['formats'][-1].get('url')
+                # Find the best format with a valid direct URL
+                for fmt in reversed(info['formats']):
+                    if fmt.get('url') and fmt.get('ext') == 'mp4':
+                        video_url = fmt.get('url')
+                        break
+                if not video_url:
+                    video_url = info['formats'][-1].get('url')
 
             if video_url:
                 return {"status": "success", "url": video_url}
             else:
-                raise HTTPException(status_code=400, detail="No direct video URL found.")
+                raise HTTPException(status_code=400, detail="No direct playable URL found.")
                 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
