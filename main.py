@@ -15,17 +15,23 @@ def health_check():
 
 @app.post("/extract")
 def extract_video(req: DownloadRequest):
-    # Dynamic headers to bypass bot detection on FB/Insta/YT without cookies
     ydl_opts = {
-        'format': 'best',
+        'format': 'bestvideo+bestaudio/best' if not req.audio else 'bestaudio/best',
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'http_headers': {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Sec-Fetch-Mode': 'navigate',
+        },
+        # YouTube Specific Bypass Args (Bypasses SABR / PO Token Bot detection)
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web_creator'],
+                'skip': ['hls', 'dash']
+            }
         }
     }
 
