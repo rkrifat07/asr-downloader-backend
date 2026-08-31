@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import requests
+import json
+import urllib.request
 
 app = FastAPI()
 
@@ -21,24 +22,26 @@ def health_check():
 
 @app.post("/extract")
 def extract_video(req: DownloadRequest):
+    payload = json.dumps({
+        "url": req.url,
+        "videoQuality": req.quality,
+        "downloadMode": "audio" if req.audio else "auto"
+    }).encode("utf-8")
+    
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
-    payload = {
-        "url": req.url,
-        "videoQuality": req.quality,
-        "downloadMode": "audio" if req.audio else "auto"
-    }
     
     for instance in COBALT_INSTANCES:
         try:
-            res = requests.post(f"{instance}/", json=payload, headers=headers, timeout=8)
-            if res.status_code == 200:
-                data = res.json()
-                video_url = data.get("url") or data.get("picker", [{}])[0].get("url")
-                if video_url:
-                    return {"status": "success", "url": video_url}
+            request = urllib.request.Request(f"{instance}/", data=payload, headers=headers, method="POST")
+            with urllib.request.urlopen(request, timeout=8) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode("utf-8"))
+                    video_url = data.get("url") or (data.get("picker", [{}])[0].get("url") if data.get("picker") else None)
+                    if video_url:
+                        return {"status": "success", "url": video_url}
         except Exception:
             continue
             
