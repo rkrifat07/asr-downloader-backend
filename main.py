@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import yt_dlp
+import requests
 
 app = FastAPI()
 
@@ -9,56 +10,62 @@ class DownloadRequest(BaseModel):
     quality: str = "1080"
     audio: bool = False
 
+INVIDIOUS_INSTANCES = [
+    "https://inv.tux.stream",
+    "https://invidious.nerdvpn.de",
+    "https://yt.artemislena.eu"
+]
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "asr-guardian-child-backend"}
 
+def get_youtube_fallback(url: str):
+    video_id = url.split("v=")[-1].split("&")[0].split("?")[0].split("/")[-1]
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    for instance in INVIDIOUS_INSTANCES:
+        try:
+            res = requests.get(f"{instance}/api/v1/videos/{video_id}", headers=headers, timeout=6)
+            if res.status_code == 200:
+                data = res.json()
+                format_streams = data.get("formatStreams", [])
+                if format_streams:
+                    return format_streams[-1].get("url")
+        except Exception:
+            continue
+    return None
+
 @app.post("/extract")
 def extract_video(req: DownloadRequest):
-    # Enforce pure direct MP4 format that Android native gallery players can play
-    format_option = 'best[ext=mp4]/best' if not req.audio else 'bestaudio[ext=m4a]/bestaudio/best'
-
+    # Enforce direct MP4 format for gallery playback
     ydl_opts = {
-        'format': format_option,
+        'format': 'best[ext=mp4]/best',
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
-        'user_agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
-        'http_headers': {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-        },
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios'],
-                'skip': ['hls', 'dash']
-            },
-            'instagram': {
-                'claim_manifest': False
-            }
-        }
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
-            
-            # Retrieve direct MP4 play-able video URL
             video_url = info.get('url')
             
             if not video_url and 'formats' in info:
-                # Find the best format with a valid direct URL
                 for fmt in reversed(info['formats']):
                     if fmt.get('url') and fmt.get('ext') == 'mp4':
                         video_url = fmt.get('url')
                         break
-                if not video_url:
-                    video_url = info['formats'][-1].get('url')
 
             if video_url:
                 return {"status": "success", "url": video_url}
-            else:
-                raise HTTPException(status_code=400, detail="No direct playable URL found.")
                 
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        # If Render IP is bot-blocked by YouTube, fallback to Invidious Network automatically
+        if "youtube.com" in req.url or "youtu.be" in req.url:
+            fallback_url = get_youtube_fallback(req.url)
+            if fallback_url:
+                return {"status": "success", "url": fallback_url}
+
+    raise HTTPException(status_code=400, detail="Failed to extract stream.")
