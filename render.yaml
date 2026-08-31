@@ -1,0 +1,46 @@
+# Render blueprint — https://render.com/docs/blueprint-spec
+#
+# The service name produces the URL the child app is hardcoded to call:
+#   https://asr-downloader-backend.onrender.com
+# Renaming this service breaks the shipped APKs.
+
+services:
+  - type: web
+    name: asr-downloader-backend
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+    autoDeploy: true
+
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    # Single worker: the free tier has 512 MB, and extraction already runs on an internal
+    # thread pool (MAX_WORKERS), so extra uvicorn workers only add memory pressure.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 65
+
+    healthCheckPath: /health
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: LOG_LEVEL
+        value: INFO
+      # Must stay BELOW the Android client's hard 8s limit so the app gets a JSON error
+      # rather than a dropped connection.
+      - key: EXTRACT_TIMEOUT_S
+        value: "6.5"
+      - key: MAX_WORKERS
+        value: "4"
+      - key: RATE_LIMIT_REQUESTS
+        value: "30"
+      - key: RATE_LIMIT_WINDOW_S
+        value: "60"
+      - key: YTDLP_UPDATE_INTERVAL_H
+        value: "12"
+      # SECRETS — set these in the Render dashboard, never in this file.
+      #   COOKIES_TXT : Netscape cookies.txt contents; unlocks gated Instagram/Facebook media.
+      #   API_KEY     : when set, callers must send a matching X-API-Key header.
+      - key: COOKIES_TXT
+        sync: false
+      - key: API_KEY
+        sync: false

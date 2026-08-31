@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Secrets — a cookies.txt is a live logged-in session. Never commit one.
+.env
+*.env
+cookies.txt
+asr_cookies.txt
+
+# Tooling / OS
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.idea/
+.vscode/
+*.log
+.DS_Store
+Thumbs.db

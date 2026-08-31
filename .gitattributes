@@ -1,0 +1,5 @@
+# Force LF in the repository. CRLF in a Dockerfile CMD or a shell script breaks on Linux,
+# and the deploy targets (Render, Docker) are all Linux even when authoring on Windows.
+* text=auto eol=lf
+*.png binary
+*.jpg binary

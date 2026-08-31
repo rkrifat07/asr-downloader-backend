@@ -1,0 +1,11 @@
+# ASR Downloader Backend — Python dependencies
+#
+# yt-dlp is deliberately UNPINNED: platform extractors break constantly, so every Render
+# build must pull the newest release, and updater.py upgrades long-lived instances in place.
+# Everything else is pinned for reproducible, auditable builds.
+
+yt-dlp
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.5
